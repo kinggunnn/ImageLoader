@@ -1,5 +1,5 @@
 package com.example.imgupload
-
+//메인 앱의 도입 부분
 
 import ImageAdapter
 import android.os.Bundle
@@ -10,7 +10,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import coil3.ImageLoader
 import coil3.load
+import coil3.request.CachePolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -20,18 +22,27 @@ import org.jsoup.Jsoup
 import java.io.IOException
 
 class MainActivity : AppCompatActivity() {
+    //뷰설정
     private lateinit var recyclerView: RecyclerView
     private lateinit var uploadButton: Button
     private lateinit var adapter: ImageAdapter
-    private val client = OkHttpClient()  // ✅ OkHttpClient 객체 생성
+    private val client = OkHttpClient()  // OkHttpClient  생성
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        //메모리 활성화용 imageLoader
+        val imageLoader = ImageLoader.Builder(this).memoryCachePolicy(CachePolicy.ENABLED).diskCachePolicy(CachePolicy.ENABLED).build()
+
         recyclerView = findViewById(R.id.listView)
         uploadButton = findViewById(R.id.uploadButton)
-        adapter = ImageAdapter()
+
+        //이미지어답터따로구성
+        adapter = ImageAdapter(imageLoader)
+
+
+
 
         recyclerView.layoutManager = GridLayoutManager(this, 2)
         recyclerView.adapter = adapter
@@ -43,28 +54,32 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    //이미지 로드함수, 잘 가져오는지 로그캣 확인 가능
     private fun loadImages() {
         lifecycleScope.launch {
             try {
                 val imageUrls = withContext(Dispatchers.IO) {
-                    fetchCategoryImages()  // ✅ API 방식으로 가져옴
+                    fetchCategoryImages()  // API 방식으로 가져옴
                 }
 
                 Log.d("DEBUG_TAG", "num of URL1 : ${imageUrls.size}")
                 //imageUrls.forEach { Log.d("DEBUG_TAG", "image URL: $it") }
+                //이미지 url직접 확인가능
 
-                adapter.submitList(imageUrls)  // ✅ 기존 어댑터 유지
+                adapter.submitList(imageUrls)
             } catch (e: Exception) {
                 e.printStackTrace()
-                Log.e("DEBUG_TAG", "ERROR!!!!", e)
+                Log.e("DEBUG_TAG", "ERROR", e)
             }
         }
     }
 
+    //api 요청으로 카테고리 이미지 가져오는 함수
+    //홈페이지 개발자 모드 확인 후 Fetch/XHR 확인해서 jsonData 가져오기
     private fun fetchCategoryImages(): List<String> {
         val url =
             "https://sch.sooplive.co.kr/api.php?m=categoryList&szKeyword=&szOrder=view_cnt&nPageNo=1&nListCnt=120&nOffset=0&szPlatform=pc"
-
+        //봇차단인거같아서 user-agent로 넣기
         val request = Request.Builder()
             .url(url)
             .header(
@@ -75,15 +90,16 @@ class MainActivity : AppCompatActivity() {
             .header("Referer", "https://www.sooplive.co.kr/")
             .build()
 
-        val response = client.newCall(request).execute()  // ✅ 동기 실행 (비동기 X)
+        val response = client.newCall(request).execute()  // 동기 실행
         val jsonData = response.body?.string() ?: return emptyList()
 
         return extractImageUrls(jsonData)
     }
 
+    //응답받은 json데이터를 이미지 추출하는 함수
     private fun extractImageUrls(jsonData: String): List<String> {
         val imageUrls = mutableListOf<String>()
-
+        //json 확인 120개 데이터 중 list내에 cate_img 항목만 가져와서 url 저장
         try {
             val jsonObject = JSONObject(jsonData)
             val data = jsonObject.getJSONObject("data")
@@ -95,7 +111,7 @@ class MainActivity : AppCompatActivity() {
                 imageUrls.add(imageUrl)
             }
         } catch (e: Exception) {
-            Log.e("DEBUG_TAG", "🚨 JSON 파싱 오류: ${e.message}")
+            Log.e("DEBUG_TAG", " JSON parsing error: ${e.message}")
         }
 
         return imageUrls
